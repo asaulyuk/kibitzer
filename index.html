@@ -1,0 +1,2995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="author" content="Marko Asaulyuk">
+  <meta name="creator" content="Marko Asaulyuk">
+  <meta name="description" content="Kibitzer — free open source chess trainer with AI coaching powered by Stockfish. Created by Marko Asaulyuk at San Francisco State University.">
+  <meta name="keywords" content="Marko Asaulyuk, Kibitzer, free chess trainer, open source chess, AI chess coach, Stockfish, free chess analysis, SFSU, San Francisco State University">
+  <meta property="og:title" content="Kibitzer — Free Chess Trainer">
+  <meta property="og:description" content="Free open source chess trainer with AI coaching powered by Stockfish. Created by Marko Asaulyuk at San Francisco State University.">
+  <title>Kibitzer — Free Chess Trainer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.js"></script>
+  <style>
+    :root {
+      --bg: #1e1e2e;
+      --panel: #181825;
+      --surface: #232338;
+      --surface-2: #202033;
+      --border: #313244;
+      --text: #cdd6f4;
+      --muted: #8b8ea8;
+      --accent: #7c3aed;
+      --accent-h: #8b5cf6;
+      --green: #a6e3a1;
+      --red: #f38ba8;
+      --blue: #89b4fa;
+      --light-sq: #f0d9b5;
+      --dark-sq: #b58863;
+      --highlight-from: rgba(155, 199, 0, 0.41);
+      --highlight-to: rgba(155, 199, 0, 0.60);
+      --board-size: 512px;
+      --square-size: 64px;
+      --right-panel-width: 340px;
+      --radius: 6px;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #eff1f5;
+        --panel: #ffffff;
+        --surface: #eef1f8;
+        --surface-2: #f6f7fb;
+        --border: #ccd0da;
+        --text: #4c4f69;
+        --muted: #7c819a;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    header h1 { font-size: 1rem; font-weight: 700; letter-spacing: -0.02em; }
+    .header-credit {
+      font-size: 14px;
+      opacity: 1;
+      font-weight: 300;
+      font-style: normal;
+      margin-left: 10px;
+      color: rgba(255, 255, 255, 0.65);
+    }
+    .header-separator {
+      font-size: 16px;
+      margin-right: 6px;
+    }
+    .hcontrols { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .ctrl-wrap {
+      display: inline-flex;
+      align-items: center;
+    }
+    .lang-toggle {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .lang-btn {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      padding: 2px 4px 5px;
+      border-radius: 0;
+      border-bottom: 2px solid transparent;
+      font-size: 18px;
+      line-height: 1;
+      opacity: 0.5;
+    }
+    .lang-btn:hover { background: transparent; opacity: 0.8; }
+    .lang-btn.active {
+      opacity: 1;
+      border-bottom-color: var(--accent);
+    }
+    label.ctrl {
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text);
+    }
+    select,
+    input[type="text"],
+    input[type="password"],
+    input[type="number"] {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 7px 9px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    input:focus,
+    select:focus { border-color: var(--accent); }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      padding: 7px 11px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+      white-space: nowrap;
+    }
+    button:hover { background: var(--accent-h); }
+    button.sec {
+      background: transparent;
+      color: var(--text);
+      border-color: var(--border);
+    }
+    button.sec:hover { background: var(--surface); }
+    button.sec.is-disabled,
+    button.sec:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    button.tog {
+      background: var(--surface);
+      color: var(--muted);
+      border-color: var(--border);
+    }
+    button.tog.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    button:disabled { opacity: 0.65; cursor: default; }
+    .layout {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .evalwrap {
+      width: 20px;
+      height: calc(var(--board-size) + 4px);
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      padding: 2px 4px 2px 2px;
+      flex-shrink: 0;
+      align-self: center;
+    }
+    .eval-bar {
+      width: 12px;
+      height: 100%;
+      background: #15151d;
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.06);
+      position: relative;
+    }
+    .eval-white {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      height: 50%;
+      background: #f5f5f5;
+      transition: height 0.4s ease, width 0.4s ease;
+    }
+    .board-area {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      gap: 8px;
+      overflow: hidden;
+    }
+    .board-stack {
+      width: calc(var(--board-size) + 24px);
+      max-width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 2px;
+    }
+    .player-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 24px;
+      gap: 8px;
+    }
+    .player-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      flex: 1;
+    }
+    .pname { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .prating { font-size: 13px; color: var(--muted); flex-shrink: 0; }
+    .material-adv {
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+      color: #4caf7d;
+    }
+    .captured-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+    }
+    .captured-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .captured-item img {
+      width: 20px;
+      height: 20px;
+      display: block;
+    }
+    .captured-piece img,
+    .captured-piece {
+      filter: drop-shadow(0 0 1px rgba(255,255,255,0.9));
+    }
+    .board-wrap { display: flex; gap: 0; align-items: stretch; }
+    .coords-rank {
+      width: 20px;
+      height: var(--board-size);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      padding: 0 3px 0 0;
+    }
+    .coords-file {
+      width: var(--board-size);
+      display: flex;
+      justify-content: space-around;
+      padding: 2px 0 0;
+    }
+    .coords-rank span,
+    .coords-file span {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      font-weight: 700;
+    }
+    #board {
+      width: var(--board-size);
+      height: var(--board-size);
+      display: grid;
+      grid-template-columns: repeat(8, var(--square-size));
+      grid-template-rows: repeat(8, var(--square-size));
+      border: 2px solid rgba(0,0,0,0.35);
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .sq {
+      width: var(--square-size);
+      height: var(--square-size);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .sq.light { background: var(--light-sq); }
+    .sq.dark { background: var(--dark-sq); }
+    .sq.hl-from { background: var(--highlight-from) !important; }
+    .sq.hl-to { background: var(--highlight-to) !important; }
+    .sq.hl-sel { background: rgba(20, 190, 80, 0.5) !important; }
+    .sq img {
+      width: calc(var(--square-size) * 0.87);
+      height: calc(var(--square-size) * 0.87);
+      pointer-events: none;
+      position: relative;
+      z-index: 2;
+    }
+    .dot {
+      width: calc(var(--square-size) * 0.33);
+      height: calc(var(--square-size) * 0.33);
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.15);
+      position: absolute;
+      z-index: 3;
+      pointer-events: none;
+    }
+    .ring {
+      width: calc(var(--square-size) * 0.92);
+      height: calc(var(--square-size) * 0.92);
+      border-radius: 50%;
+      border: max(3px, calc(var(--square-size) * 0.07)) solid rgba(0, 0, 0, 0.15);
+      position: absolute;
+      z-index: 3;
+      pointer-events: none;
+    }
+    .rpanel {
+      width: var(--right-panel-width);
+      min-width: 280px;
+      max-width: 420px;
+      flex: 0 0 var(--right-panel-width);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+      border-left: 1px solid var(--border);
+      background: var(--panel);
+    }
+    .tabs {
+      display: flex;
+      flex-wrap: nowrap;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .tab {
+      flex: 1;
+      min-width: 0;
+      text-align: center;
+      padding: 10px 8px;
+      font-size: 12px;
+      white-space: nowrap;
+      cursor: pointer;
+      color: var(--muted);
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s ease, border-color 0.15s ease;
+    }
+    .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+    .top-pane {
+      flex: 0 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .tcontent { display: none; flex-direction: column; min-height: 0; }
+    .tcontent.active {
+      display: flex;
+      overflow: hidden;
+    }
+    .chat-pane {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 120px;
+      overflow: hidden;
+      border-top: 1px solid var(--border);
+    }
+    .sec {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sec-title {
+      font-size: 11px;
+      line-height: 1;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+    .subtle {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .itoggle {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .itoggle button { flex: 1; }
+    .user-grid {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .field {
+      display: grid;
+      gap: 4px;
+    }
+    .field label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .irow {
+      display: flex;
+      gap: 6px;
+    }
+    .irow input { flex: 1; }
+    .games-scroll {
+      max-height: 170px;
+      overflow-y: auto;
+    }
+    .gitem {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .gitem:hover { background: rgba(124,58,237,0.08); }
+    .gresult { font-weight: 700; margin-right: 6px; font-size: 13px; }
+    .gresult.win { color: #4caf7d; }
+    .gresult.loss { color: #c93a3a; }
+    .gresult.draw { color: #888888; }
+    .gplayers { font-size: 13px; color: var(--text); }
+    .gopening { font-size: 13px; color: var(--muted); margin-top: 3px; }
+    .analyze-row {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .analyze-btn {
+      width: 100%;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+    }
+    .opening-lbl {
+      padding: 6px 12px 0;
+      font-size: 13px;
+      color: var(--blue);
+      font-style: italic;
+      min-height: 22px;
+      flex-shrink: 0;
+    }
+    .moves-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px 0;
+      flex-shrink: 0;
+    }
+    .moves-status {
+      font-size: 11px;
+      color: var(--muted);
+      min-height: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .moves-scroll {
+      max-height: 180px;
+      overflow-y: auto;
+      padding: 8px 10px;
+      flex-shrink: 0;
+    }
+    .moves-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px 4px;
+      font-size: 12px;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    }
+    .mnum { color: var(--muted); padding: 2px 1px; }
+    .mtok {
+      padding: 2px 5px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .mtok:hover { background: rgba(255,255,255,0.08); }
+    .mtok.cur { background: var(--accent); color: #fff; }
+    .mtok.inaccuracy { color: #f0c93a; }
+    .mtok.mistake { color: #e07c22; }
+    .mtok.blunder { color: #c93a3a; }
+    .mtok.brilliant { color: #4caf7d; }
+    .nav {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 10px 10px;
+      flex-shrink: 0;
+    }
+    .nav button {
+      width: 34px;
+      height: 30px;
+      padding: 0;
+    }
+    .coach-box {
+      min-height: 72px;
+      flex-shrink: 0;
+    }
+    .coach-text {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+    .coach-subtext {
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .play-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .play-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .play-row label {
+      font-size: 13px;
+      color: var(--muted);
+      min-width: 86px;
+    }
+    .play-meta {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .chat-head {
+      padding: 10px 12px 0;
+      flex-shrink: 0;
+    }
+    .chat-msgs {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .cmsg {
+      max-width: 92%;
+      padding: 8px 10px;
+      border-radius: 10px;
+      font-size: 13px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .cmsg.user {
+      align-self: flex-end;
+      background: var(--accent);
+      color: #fff;
+      border-bottom-right-radius: 3px;
+    }
+    .cmsg.asst {
+      align-self: flex-start;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 3px;
+    }
+    .cmsg.error {
+      align-self: flex-start;
+      background: rgba(201, 58, 58, 0.14);
+      border: 1px solid rgba(201, 58, 58, 0.55);
+      color: #ffb4b4;
+      border-bottom-left-radius: 3px;
+      white-space: pre-line;
+    }
+    .chat-row {
+      display: flex;
+      gap: 6px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      background: var(--panel);
+    }
+    .chat-row input {
+      flex: 1;
+      min-width: 0;
+    }
+    .chat-row button {
+      width: 44px;
+      min-width: 44px;
+      padding: 7px 0;
+      flex: 0 0 44px;
+    }
+    .dots { display: inline-flex; gap: 4px; }
+    .dots span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+      animation: pulse 1.1s ease-in-out infinite;
+    }
+    .dots span:nth-child(2) { animation-delay: 0.16s; }
+    .dots span:nth-child(3) { animation-delay: 0.32s; }
+    @keyframes pulse {
+      0%, 80%, 100% { transform: scale(0.45); opacity: 0.35; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+    .wr-progress { padding: 10px 0 0; }
+    .wr-status { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .wr-track {
+      height: 6px;
+      border-radius: 999px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .wr-fill {
+      width: 0%;
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.35s ease;
+    }
+    .wr-error {
+      padding-top: 8px;
+      font-size: 13px;
+      color: var(--red);
+      line-height: 1.4;
+    }
+    .modal-bg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+    .modal-bg.open { display: flex; }
+    .modal {
+      width: 360px;
+      max-width: 92vw;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .modal h3 { margin-bottom: 12px; font-size: 16px; }
+    .modal-acts { display: flex; justify-content: flex-end; margin-top: 8px; }
+    .groq-help {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.8;
+      white-space: pre-line;
+      margin-top: 8px;
+    }
+    .modal-disclaimer {
+      font-size: 11px;
+      color: rgba(255,165,0,0.8);
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+    .about-box {
+      font-size: 11px;
+      opacity: 0.5;
+      text-align: center;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 0.5px solid rgba(255,255,255,0.1);
+      line-height: 1.6;
+    }
+    .about-open {
+      color: var(--green);
+      font-weight: 700;
+    }
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%);
+      background: rgba(24, 24, 37, 0.96);
+      color: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 13px;
+      line-height: 1.4;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.28);
+      z-index: 80;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+    body.blue-board {
+      --light-sq: #dee3e6;
+      --dark-sq: #8ca2ad;
+      --highlight-from: rgba(255, 255, 100, 0.50);
+      --highlight-to: rgba(255, 255, 100, 0.75);
+    }
+    @media (max-width: 900px) {
+      .header-credit { display: none; }
+    }
+    @media (max-width: 600px) {
+      html, body { overflow: hidden; }
+      .layout {
+        flex-direction: column;
+      }
+      .board-area {
+        padding: 8px;
+        flex: 0 0 auto;
+      }
+      .board-stack {
+        width: 100%;
+        align-items: stretch;
+      }
+      .player-row { padding: 0 12px; }
+      .evalwrap {
+        order: 2;
+        width: calc(var(--board-size) + 24px);
+        height: 14px;
+        padding: 0 0 6px 24px;
+        align-self: center;
+      }
+      .eval-bar {
+        width: 100%;
+        height: 12px;
+      }
+      .eval-white {
+        width: 50%;
+        height: 100% !important;
+        left: 0;
+        bottom: auto;
+      }
+      .rpanel {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      .chat-row {
+        position: sticky;
+        bottom: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1><span id="appTitle"></span><span class="header-credit"><span class="header-separator">&middot;</span><span id="sfsuCredit"></span></span></h1>
+  <div class="hcontrols">
+    <div class="lang-toggle">
+      <button class="lang-btn active" id="langEn" onclick="setLanguage('en')">🇬🇧</button>
+      <button class="lang-btn" id="langUk" onclick="setLanguage('uk')">🇺🇦</button>
+    </div>
+    <label class="ctrl"><span id="lblPieces"></span>
+      <select id="selTheme">
+        <option value="cburnett">cburnett</option>
+        <option value="merida">merida</option>
+        <option value="alpha">alpha</option>
+        <option value="california">california</option>
+        <option value="pixel">pixel</option>
+        <option value="maestro">maestro</option>
+      </select>
+    </label>
+    <label class="ctrl"><span id="lblBoard"></span>
+      <select id="selBoard">
+        <option value="brown" id="optBoardBrown"></option>
+        <option value="blue" id="optBoardBlue"></option>
+      </select>
+    </label>
+    <span class="ctrl-wrap" id="flipWrap">
+      <button class="sec" id="flipBtn"></button>
+    </span>
+    <button class="sec" id="gearBtn">⚙</button>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="board-area">
+    <div class="evalwrap">
+      <div class="eval-bar">
+        <div class="eval-white" id="evalFill"></div>
+      </div>
+    </div>
+    <div class="board-stack">
+      <div class="player-row">
+        <div class="player-meta">
+          <span class="pname" id="pBlackName"></span>
+          <span class="prating" id="pBlackRating"></span>
+          <span class="material-adv" id="pBlackMaterial"></span>
+        </div>
+        <div class="captured-row" id="capBlack"></div>
+      </div>
+      <div class="board-wrap">
+        <div class="coords-rank" id="cRank"></div>
+        <div>
+          <div id="board"></div>
+          <div class="coords-file" id="cFile"></div>
+        </div>
+      </div>
+      <div class="player-row">
+        <div class="player-meta">
+          <span class="pname" id="pWhiteName"></span>
+          <span class="prating" id="pWhiteRating"></span>
+          <span class="material-adv" id="pWhiteMaterial"></span>
+        </div>
+        <div class="captured-row" id="capWhite"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rpanel">
+    <div class="tabs">
+      <div class="tab active" data-tab="play" id="tabPlayLabel"></div>
+      <div class="tab" data-tab="review" id="tabReviewLabel"></div>
+    </div>
+
+    <div class="top-pane">
+      <div class="tcontent" id="tab-review">
+        <div class="sec">
+          <div class="sec-title" id="reviewImportTitle"></div>
+          <div class="itoggle">
+            <button id="btnLichess" class="tog active" onclick="setSource('lichess')"></button>
+            <button id="btnChesscom" class="tog" onclick="setSource('chesscom')"></button>
+          </div>
+          <div class="user-grid">
+            <div class="field" id="lichessUserField">
+              <label for="inLichessUser" id="lblLichessUser"></label>
+              <input type="text" id="inLichessUser">
+            </div>
+            <div class="field" id="chesscomUserField">
+              <label for="inChesscomUser" id="lblChesscomUser"></label>
+              <input type="text" id="inChesscomUser">
+            </div>
+          </div>
+          <div class="irow">
+            <button onclick="fetchGames()" id="btnFetchGames"></button>
+          </div>
+        </div>
+
+        <div style="border-bottom:1px solid var(--border); flex-shrink:0;">
+          <div class="games-scroll" id="gamesList">
+            <div class="subtle" style="padding:10px 12px;" id="gamesListEmpty"></div>
+          </div>
+        </div>
+
+        <div class="analyze-row">
+          <button id="btnAnalyzeGames" class="analyze-btn" onclick="analyzeMyGames()"></button>
+          <div class="wr-progress" id="wrProgress" style="display:none;">
+            <div class="wr-status" id="wrStatus"></div>
+            <div class="wr-track"><div class="wr-fill" id="wrFill"></div></div>
+          </div>
+          <div class="wr-error" id="wrError" style="display:none;"></div>
+        </div>
+
+        <div class="opening-lbl" id="openingLbl"></div>
+
+        <div style="border-bottom:1px solid var(--border); flex-shrink:0;">
+          <div class="moves-head">
+            <div class="sec-title" id="movesTitle"></div>
+            <div class="moves-status" id="movesEvalStatus"></div>
+          </div>
+          <div class="moves-scroll" id="movesScroll">
+            <div class="moves-grid" id="movesGrid"></div>
+          </div>
+          <div class="nav">
+            <button onclick="goStart()">⏮</button>
+            <button onclick="goPrev()">◀</button>
+            <button onclick="goNext()">▶</button>
+            <button onclick="goEnd()">⏭</button>
+          </div>
+        </div>
+
+        <div class="sec coach-box">
+          <div class="sec-title" id="reviewCoachTitle"></div>
+          <div class="coach-text" id="coachReview"></div>
+        </div>
+      </div>
+
+      <div class="tcontent active" id="tab-play">
+        <div class="play-controls">
+          <div class="play-row">
+            <label for="selPlayColor" id="lblPlayColor"></label>
+            <select id="selPlayColor">
+              <option value="w" id="optPlayWhite"></option>
+              <option value="b" id="optPlayBlack"></option>
+              <option value="random" id="optPlayRandom"></option>
+            </select>
+            <button onclick="resetPlay()" id="btnNewGame"></button>
+          </div>
+          <div class="play-row">
+            <span class="status-chip" id="playStatus"></span>
+          </div>
+        </div>
+        <div class="sec coach-box">
+          <div class="sec-title" id="playCoachTitle"></div>
+          <div class="coach-text" id="coachPlay"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-pane">
+      <div class="chat-head">
+        <div class="sec-title" id="chatTitle"></div>
+      </div>
+      <div class="chat-msgs" id="chatMsgs"></div>
+      <div class="chat-row">
+        <input type="text" id="chatInput">
+        <button onclick="sendChat()" id="btnSendChat"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="settingsModal">
+  <div class="modal">
+    <h3 id="settingsTitle"></h3>
+    <div class="modal-disclaimer" id="settingsDisclaimer"></div>
+    <div class="field">
+      <label for="inGroqKey" id="lblGroqKey"></label>
+      <input type="password" id="inGroqKey">
+      <div class="groq-help" id="groqHelp"></div>
+    </div>
+    <div class="modal-acts">
+      <button class="sec" onclick="closeModal()" id="btnCloseSettings"></button>
+    </div>
+    <div class="about-box">
+      <div id="aboutVersion"></div>
+      <div id="aboutCreator"></div>
+      <div id="aboutSchool"></div>
+      <div class="about-open" id="aboutOpen"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="appToast"></div>
+
+<script>
+const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const STORAGE_KEYS = {
+  groq: 'groq_api_key',
+  lichess: 'kibitzerLichessUser',
+  chesscom: 'kibitzerChesscomUser',
+  lang: 'kibitzer_lang',
+};
+const i18n = {
+  en: {
+    pageTitle: 'Kibitzer — Free Chess Trainer',
+    appTitle: '♞ Kibitzer',
+    sfsuCredit: 'Designed at San Francisco State University 🐊',
+    pieces: 'Pieces:',
+    board: 'Board:',
+    flip: '⇅ Flip',
+    reviewTab: 'Review Game',
+    playTab: 'Play vs Coach',
+    boardBrown: 'Brown',
+    boardBlue: 'Blue',
+    flipDisabledHint: 'Orientation set by color choice',
+    importGames: 'Import Games',
+    sourceLichess: 'Lichess',
+    sourceChesscom: 'Chess.com',
+    lichessUsername: 'Lichess Username',
+    chesscomUsername: 'Chess.com Username',
+    lichessPlaceholder: 'lichess handle',
+    chesscomPlaceholder: 'chess.com handle',
+    fetch: 'Fetch',
+    movesTitle: 'Move List',
+    evalLoading: 'Evaluating',
+    noGamesLoaded: 'No games loaded',
+    noGamesFound: 'No games found',
+    analyze30: '♟ Analyze last 30 days',
+    fetchingGames: 'Fetching games...',
+    coach: 'KIBITZER',
+    reviewCoachIdle: 'Load a game and navigate moves to get coaching feedback.',
+    playAsWhite: 'Play as White',
+    playAsBlack: 'Play as Black',
+    color: 'Color',
+    random: 'Random',
+    newGame: 'New Game',
+    playStatusIdle: 'Coach waits for your move.',
+    playCoachIdle: 'Start a new game and the coach will reply with an engine-backed move that matches your current effective ELO.',
+    coachWaits: 'Coach waits for your move.',
+    kibitzerReady: "Alright, let's see what you got.",
+    coachIntro: 'Start a new game and make your move.',
+    chatTitle: 'Coach Chat',
+    chatPlaceholder: 'Ask Kibitzer anything about this position',
+    sendArrow: '→',
+    settingsTitle: 'Kibitzer Settings',
+    settingsDisclaimer: `⚠ AI coaching is experimental and may occasionally
+make mistakes. When in doubt, just ask!`,
+    groqKey: 'Groq API Key',
+    groqPlaceholder: 'Groq API key',
+    groqHelp: `Free AI coaching requires a Groq API key.
+1. Go to console.groq.com
+2. Sign up (Google login works)
+3. Click API Keys -> Create new key
+4. Paste it above
+Takes 2 minutes. No credit card needed.`,
+    groqToast: 'Add your free Groq key in Settings ⚙ to enable AI coaching',
+    aboutVersion: 'Kibitzer v1.0',
+    aboutCreator: 'Created by Marko Asaulyuk',
+    aboutSchool: 'San Francisco State University 🐊',
+    aboutOpen: 'Free & Open Source',
+    close: 'Close',
+    ready: 'Kibitzer is ready.',
+    parsePgnError: 'Could not parse PGN.',
+    reviewStartingPosition: 'At the starting position.',
+    reviewCoachLoaded: 'Navigate moves to get coaching feedback.',
+    playGotWhite: 'You got White!',
+    playGotBlack: 'You got Black!',
+    playStarted: 'Game started. Make your move.',
+    yourMove: 'Your move.',
+    kibitzerOpens: 'Kibitzer opens.',
+    thinking: '',
+    gameOver: 'The game is over.',
+    noLegalReply: 'Kibitzer could not find a legal reply.',
+    kibitzerPlayed: '',
+    gameFinished: 'Game finished.',
+    noUsernames: 'Enter at least one username first.',
+    gamesFound: 'Fetching games... ({count} found)',
+    analyzingPositions: 'Analyzing positions... ({done}/{total})',
+    buildingReport: 'Building report...',
+    noWeaknessReport: 'No weakness report yet.',
+    weakPhase: '{phase} is your shakiest phase.',
+    weakWatch: ' Watch {opening}.',
+    weakCollapse: ' Repeated collapses show up in {phase}.',
+    weakBlown: ' {count} blown {noun} stood out.',
+    blownSingular: 'win',
+    blownPlural: 'wins',
+    reportPrompt: 'Here are the last-30-days weakness stats:\n{stats}\n\nGive a plain-English coaching report covering the main weakness, why it costs games, and three actionable study priorities.',
+    slowDown: "Let's slow it down — no rush.",
+    raiseStakes: "You're playing sharp — raising the stakes.",
+    checkmate: 'Checkmate on the board.',
+    stalemate: 'Stalemate.',
+    drawnGame: 'Drawn game.',
+    gameEnded: 'The game is over.',
+    noGroqKey: 'No Groq API key',
+    noRecentGames: 'No games found in the last 30 days.',
+    whiteSideName: 'White',
+    blackSideName: 'Black',
+    youName: 'You',
+    kibitzerName: 'Kibitzer',
+    versus: 'vs',
+    unknownPlayer: 'Unknown',
+    unknownOpening: 'Unknown Opening',
+    errorPrefix: 'Error: ',
+    modelLabel: 'Model',
+    statusLabel: 'Status',
+    lichessHttpError: 'Lichess HTTP {status}',
+    chesscomBlocked: 'Chess.com blocked this request. Serve the file via: python -m http.server 8080',
+    noResponse: 'No response.'
+  },
+  uk: {
+    pageTitle: 'Kibitzer — Free Chess Trainer',
+    appTitle: '♞ Kibitzer',
+    sfsuCredit: 'Розроблено в Державному університеті Сан-Франциско 🐊',
+    pieces: 'Фігури:',
+    board: 'Дошка:',
+    flip: '⇅ Відзеркалити',
+    reviewTab: 'Розбір',
+    playTab: 'З тренером',
+    boardBrown: 'Коричнева',
+    boardBlue: 'Синя',
+    flipDisabledHint: 'Орієнтація визначається вибором кольору',
+    importGames: 'Імпорт партій',
+    sourceLichess: 'Lichess',
+    sourceChesscom: 'Chess.com',
+    lichessUsername: 'Імʼя Lichess',
+    chesscomUsername: 'Імʼя Chess.com',
+    lichessPlaceholder: 'нік lichess',
+    chesscomPlaceholder: 'нік chess.com',
+    fetch: 'Завантажити',
+    movesTitle: 'Ходи',
+    evalLoading: 'Оцінювання',
+    noGamesLoaded: 'Партії ще не завантажені',
+    noGamesFound: 'Партій не знайдено',
+    analyze30: '♟ Аналіз останніх 30 днів',
+    fetchingGames: 'Завантаження партій...',
+    coach: 'KIBITZER',
+    reviewCoachIdle: 'Завантаж партію та переходь по ходах, щоб отримати коментарі.',
+    playAsWhite: 'Грати білими',
+    playAsBlack: 'Грати чорними',
+    color: 'Колір',
+    random: 'Випадково',
+    newGame: 'Нова гра',
+    playStatusIdle: 'Тренер чекає твого ходу.',
+    playCoachIdle: 'Почни нову гру, і тренер відповідатиме рушієм під твій поточний ELO.',
+    coachWaits: 'Тренер чекає на ваш хід.',
+    kibitzerReady: "Ну, покажи що вмієш.",
+    coachIntro: 'Розпочніть гру та зробіть хід.',
+    chatTitle: 'ЧАТ З КІБІЦЕРОМ · EN',
+    chatPlaceholder: 'Ask Kibitzer anything about this position',
+    sendArrow: '→',
+    settingsTitle: 'Налаштування Kibitzer',
+    settingsDisclaimer: `⚠ AI тренер експериментальний і може помилятись.
+Якщо щось незрозуміло — просто питай!`,
+    groqKey: 'Ключ API Groq',
+    groqPlaceholder: 'Ключ Groq API',
+    groqHelp: `Для безкоштовного AI тренера потрібен Groq ключ.
+1. Перейди на console.groq.com
+2. Зареєструйся (Google логін працює)
+3. API Keys -> Створити новий ключ
+4. Встав його вище
+2 хвилини. Картка не потрібна.`,
+    groqToast: 'Додай безкоштовний Groq ключ у Settings ⚙, щоб увімкнути AI тренера',
+    aboutVersion: 'Kibitzer v1.0',
+    aboutCreator: 'Створив Marko Asaulyuk',
+    aboutSchool: 'Державний університет Сан-Франциско 🐊',
+    aboutOpen: 'Безкоштовний і відкритий код',
+    close: 'Закрити',
+    ready: 'Kibitzer готовий.',
+    parsePgnError: 'Не вдалося розібрати PGN.',
+    reviewStartingPosition: 'Початкова позиція.',
+    reviewCoachLoaded: 'Переходь по ходах, щоб отримати коментар.',
+    playGotWhite: 'Тобі випали білі!',
+    playGotBlack: 'Тобі випали чорні!',
+    playStarted: 'Гру розпочато. Твій хід.',
+    yourMove: 'Твій хід.',
+    kibitzerOpens: 'Kibitzer починає.',
+    thinking: '',
+    gameOver: 'Гру завершено.',
+    noLegalReply: 'Kibitzer не знайшов легальної відповіді.',
+    kibitzerPlayed: '',
+    gameFinished: 'Гру завершено.',
+    noUsernames: 'Спершу введи хоча б одне імʼя користувача.',
+    gamesFound: 'Завантаження партій... ({count} знайдено)',
+    analyzingPositions: 'Аналіз позицій... ({done}/{total})',
+    buildingReport: 'Формування звіту...',
+    noWeaknessReport: 'Звіту про слабкості ще немає.',
+    weakPhase: 'Найслабша фаза — {phase}.',
+    weakWatch: ' Зверни увагу на {opening}.',
+    weakCollapse: ' Повторні провали трапляються у фазі {phase}.',
+    weakBlown: ' Помітно {count} втрач{ending}.',
+    blownSingular: 'ену перемогу',
+    blownPlural: 'ених перемог',
+    reportPrompt: 'Ось статистика слабкостей за останні 30 днів:\n{stats}\n\nДай простий тренерський звіт: головна слабкість, чому вона коштує партій, і три практичні напрямки для навчання.',
+    slowDown: 'Давай трохи сповільнимось — без поспіху.',
+    raiseStakes: 'Граєш гостро — піднімаю планку.',
+    checkmate: 'На дошці мат.',
+    stalemate: 'Пат.',
+    drawnGame: 'Нічия.',
+    gameEnded: 'Гру завершено.',
+    noGroqKey: 'Немає ключа Groq API',
+    noRecentGames: 'За останні 30 днів партій не знайдено.',
+    whiteSideName: 'Білі',
+    blackSideName: 'Чорні',
+    youName: 'Ви',
+    kibitzerName: 'Кібіцер',
+    versus: 'проти',
+    unknownPlayer: 'Невідомо',
+    unknownOpening: 'Невідомий дебют',
+    errorPrefix: 'Помилка: ',
+    modelLabel: 'Модель',
+    statusLabel: 'Статус',
+    lichessHttpError: 'Lichess HTTP {status}',
+    chesscomBlocked: 'Chess.com заблокував цей запит. Запусти файл через: python -m http.server 8080',
+    noResponse: 'Немає відповіді.'
+  }
+};
+const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+const ELO_STOPS = [
+  [500, 150], [800, 100], [1000, 70], [1200, 45],
+  [1400, 28], [1600, 16], [1800, 8], [2000, 0], [2200, 0]
+];
+const STARTING_SQUARES = {
+  a1: 'wR', b1: 'wN', c1: 'wB', d1: 'wQ', e1: 'wK', f1: 'wB', g1: 'wN', h1: 'wR',
+  a2: 'wP', b2: 'wP', c2: 'wP', d2: 'wP', e2: 'wP', f2: 'wP', g2: 'wP', h2: 'wP',
+  a7: 'bP', b7: 'bP', c7: 'bP', d7: 'bP', e7: 'bP', f7: 'bP', g7: 'bP', h7: 'bP',
+  a8: 'bR', b8: 'bN', c8: 'bB', d8: 'bQ', e8: 'bK', f8: 'bB', g8: 'bN', h8: 'bR',
+};
+
+const S = {
+  flipped: false,
+  theme: 'cburnett',
+  activeTab: 'play',
+  importSource: 'lichess',
+  currentEval: { score: 0, whiteCp: 0 },
+  lastMoveContext: null,
+  reviewChess: new Chess(),
+  playChess: new Chess(),
+  moves: [],
+  moveIdx: -1,
+  playSel: null,
+  playLastFrom: null,
+  playLastTo: null,
+  playUserColor: 'w',
+  playPending: false,
+  playCoinTimer: null,
+  playMoveCount: 0,
+  playMistakes: [],
+  lastCommentEval: null,
+  lastCommentMove: 0,
+  moveQualities: {},
+  moveEvalToken: 0,
+  moveEvalLoading: false,
+  whiteName: '',
+  blackName: '',
+  whiteRating: '',
+  blackRating: '',
+  opening: '',
+  games: [],
+  evalCache: {},
+  chatHistory: [],
+  weaknessReport: null,
+  weaknessSummaryLine: 'none yet',
+  weaknessRunning: false,
+  playColorSelection: 'w',
+  lang: 'en',
+};
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadStoredInputs();
+  loadStoredLang();
+  initEvents();
+  updateDynamicLayout();
+  updateCoords();
+  syncPlayerLabels();
+  renderUI();
+  renderBoard();
+  appendChatMessage(t('kibitzerReady'), 'asst');
+  if (!localStorage.getItem(STORAGE_KEYS.groq)?.trim()) {
+    openModal();
+  }
+});
+
+function initEvents() {
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+  });
+  document.getElementById('selTheme').addEventListener('change', e => {
+    S.theme = e.target.value;
+    renderBoard();
+  });
+  document.getElementById('selBoard').addEventListener('change', e => {
+    document.body.className = e.target.value === 'blue' ? 'blue-board' : '';
+    renderBoard();
+  });
+  document.getElementById('flipBtn').addEventListener('click', () => {
+    S.flipped = !S.flipped;
+    renderBoard();
+  });
+  document.getElementById('gearBtn').addEventListener('click', openModal);
+  document.getElementById('settingsModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('settingsModal')) closeModal();
+  });
+  document.getElementById('inGroqKey').addEventListener('input', updateGroqHelpVisibility);
+  document.getElementById('chatInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendChat();
+  });
+  document.getElementById('selPlayColor').addEventListener('change', e => {
+    S.playColorSelection = e.target.value;
+  });
+  bindDebouncedStorage('inLichessUser', STORAGE_KEYS.lichess);
+  bindDebouncedStorage('inChesscomUser', STORAGE_KEYS.chesscom);
+  bindDebouncedStorage('inGroqKey', STORAGE_KEYS.groq);
+  window.addEventListener('resize', () => {
+    updateDynamicLayout();
+    renderBoard();
+  });
+  document.addEventListener('keydown', e => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+    if (S.activeTab === 'review') {
+      if (e.key === 'ArrowLeft') goPrev();
+      if (e.key === 'ArrowRight') goNext();
+    }
+  });
+}
+
+function loadStoredInputs() {
+  document.getElementById('inLichessUser').value = localStorage.getItem(STORAGE_KEYS.lichess) || '';
+  document.getElementById('inChesscomUser').value = localStorage.getItem(STORAGE_KEYS.chesscom) || '';
+  document.getElementById('inGroqKey').value = localStorage.getItem(STORAGE_KEYS.groq) || '';
+  updateGroqHelpVisibility();
+}
+
+function loadStoredLang() {
+  const saved = localStorage.getItem(STORAGE_KEYS.lang);
+  S.lang = saved === 'uk' ? 'uk' : 'en';
+}
+
+function bindDebouncedStorage(id, key) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let timer = null;
+  el.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      localStorage.setItem(key, el.value.trim());
+      if (id === 'inGroqKey') updateGroqHelpVisibility();
+    }, 300);
+  });
+}
+
+function hasGroqKey() {
+  return Boolean(localStorage.getItem(STORAGE_KEYS.groq)?.trim() || document.getElementById('inGroqKey')?.value.trim());
+}
+
+function updateGroqHelpVisibility() {
+  const help = document.getElementById('groqHelp');
+  const input = document.getElementById('inGroqKey');
+  if (!help || !input) return;
+  const show = !input.value.trim();
+  help.textContent = show ? t('groqHelp') : '';
+  help.style.display = show ? 'block' : 'none';
+}
+
+let toastTimer = null;
+function showToast(message) {
+  const toast = document.getElementById('appToast');
+  if (!toast) return;
+  clearTimeout(toastTimer);
+  toast.textContent = message;
+  toast.classList.add('show');
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('show');
+  }, 4000);
+}
+
+function openModal() {
+  document.getElementById('settingsModal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('settingsModal').classList.remove('open');
+}
+
+function setLanguage(lang) {
+  S.lang = lang === 'uk' ? 'uk' : 'en';
+  localStorage.setItem(STORAGE_KEYS.lang, S.lang);
+  renderUI();
+}
+
+function t(key, vars = {}) {
+  const dict = i18n[S.lang] || i18n.en;
+  let text = dict[key] ?? i18n.en[key] ?? key;
+  for (const [k, v] of Object.entries(vars)) {
+    text = text.replaceAll(`{${k}}`, String(v));
+  }
+  return text;
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function setPlaceholder(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.placeholder = value;
+}
+
+function syncLocalizedMessage(id, key) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const current = el.textContent.trim();
+  const variants = Object.values(i18n).map(dict => dict[key]).filter(Boolean);
+  if (!current || variants.includes(current)) {
+    el.textContent = t(key);
+  }
+}
+
+function translateExistingText(id, keys) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const current = el.textContent.trim();
+  for (const key of keys) {
+    const variants = Object.values(i18n).map(dict => dict[key]).filter(Boolean);
+    if (variants.includes(current)) {
+      el.textContent = t(key);
+      return;
+    }
+  }
+}
+
+function updateFlipButtonState() {
+  const flipBtn = document.getElementById('flipBtn');
+  const flipWrap = document.getElementById('flipWrap');
+  const disabled = S.activeTab === 'play';
+  if (!flipBtn || !flipWrap) return;
+  flipBtn.disabled = disabled;
+  flipBtn.classList.toggle('is-disabled', disabled);
+  flipWrap.title = disabled ? t('flipDisabledHint') : '';
+}
+
+function applyI18n() {
+  document.title = t('pageTitle');
+  setText('appTitle', t('appTitle'));
+  setText('sfsuCredit', t('sfsuCredit'));
+  setText('lblPieces', t('pieces'));
+  setText('lblBoard', t('board'));
+  setText('optBoardBrown', t('boardBrown'));
+  setText('optBoardBlue', t('boardBlue'));
+  setText('flipBtn', t('flip'));
+  setText('tabReviewLabel', t('reviewTab'));
+  setText('tabPlayLabel', t('playTab'));
+  setText('reviewImportTitle', t('importGames'));
+  setText('btnLichess', t('sourceLichess'));
+  setText('btnChesscom', t('sourceChesscom'));
+  setText('lblLichessUser', t('lichessUsername'));
+  setText('lblChesscomUser', t('chesscomUsername'));
+  setPlaceholder('inLichessUser', t('lichessPlaceholder'));
+  setPlaceholder('inChesscomUser', t('chesscomPlaceholder'));
+  setText('btnFetchGames', t('fetch'));
+  setText('movesTitle', t('movesTitle'));
+  setText('gamesListEmpty', t('noGamesLoaded'));
+  setText('btnAnalyzeGames', t('analyze30'));
+  if (!document.getElementById('wrProgress') || document.getElementById('wrProgress').style.display === 'none') {
+    setText('wrStatus', t('fetchingGames'));
+  }
+  setText('reviewCoachTitle', t('coach'));
+  syncLocalizedMessage('coachReview', 'reviewCoachIdle');
+  setText('lblPlayColor', t('color'));
+  document.getElementById('optPlayWhite').textContent = t('playAsWhite');
+  document.getElementById('optPlayBlack').textContent = t('playAsBlack');
+  document.getElementById('optPlayRandom').textContent = t('random');
+  setText('btnNewGame', t('newGame'));
+  setText('playCoachTitle', t('coach'));
+  syncLocalizedMessage('coachPlay', 'coachIntro');
+  syncLocalizedMessage('playStatus', 'coachWaits');
+  setText('chatTitle', t('chatTitle'));
+  setPlaceholder('chatInput', t('chatPlaceholder'));
+  setText('btnSendChat', t('sendArrow'));
+  setText('settingsTitle', t('settingsTitle'));
+  setText('settingsDisclaimer', t('settingsDisclaimer'));
+  setText('lblGroqKey', t('groqKey'));
+  setPlaceholder('inGroqKey', t('groqPlaceholder'));
+  updateGroqHelpVisibility();
+  setText('btnCloseSettings', t('close'));
+  setText('aboutVersion', t('aboutVersion'));
+  setText('aboutCreator', t('aboutCreator'));
+  setText('aboutSchool', t('aboutSchool'));
+  setText('aboutOpen', t('aboutOpen'));
+  document.getElementById('langEn').classList.toggle('active', S.lang === 'en');
+  document.getElementById('langUk').classList.toggle('active', S.lang === 'uk');
+  updateFlipButtonState();
+}
+
+function renderUI() {
+  applyI18n();
+  if (S.activeTab === 'play') {
+    const youVariants = Object.values(i18n).map(dict => dict.youName);
+    const kibitzerVariants = Object.values(i18n).map(dict => dict.kibitzerName);
+    if (youVariants.includes(S.whiteName)) S.whiteName = t('youName');
+    if (youVariants.includes(S.blackName)) S.blackName = t('youName');
+    if (kibitzerVariants.includes(S.whiteName)) S.whiteName = t('kibitzerName');
+    if (kibitzerVariants.includes(S.blackName)) S.blackName = t('kibitzerName');
+  }
+  syncPlayerLabels();
+  translateExistingText('playStatus', ['coachWaits', 'yourMove', 'kibitzerOpens', 'thinking', 'gameFinished']);
+  translateExistingText('coachPlay', ['coachIntro', 'playGotWhite', 'playGotBlack', 'gameOver', 'noLegalReply']);
+  translateExistingText('coachReview', ['reviewCoachIdle', 'reviewCoachLoaded', 'reviewStartingPosition']);
+  setSource(S.importSource);
+  renderGamesList();
+  updateFlipButtonState();
+}
+
+function switchTab(tabName) {
+  S.activeTab = ['review', 'play'].includes(tabName) ? tabName : 'play';
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.tab === S.activeTab);
+  });
+  document.querySelectorAll('.tcontent').forEach(panel => {
+    panel.classList.toggle('active', panel.id === `tab-${S.activeTab}`);
+  });
+  updateFlipButtonState();
+  renderBoard();
+}
+
+function updateDynamicLayout() {
+  const root = document.documentElement;
+  const isMobile = window.innerWidth < 600;
+  const rightPanelWidth = isMobile ? 0 : clamp(Math.round(window.innerWidth * 0.30), 280, 420);
+  const squareSize = clamp(Math.floor(Math.min(
+    (window.innerHeight - 80) / 8,
+    (window.innerWidth - rightPanelWidth - 40) / 8
+  )), 44, 82);
+  const boardSize = squareSize * 8;
+  root.style.setProperty('--right-panel-width', `${isMobile ? window.innerWidth : rightPanelWidth}px`);
+  root.style.setProperty('--square-size', `${squareSize}px`);
+  root.style.setProperty('--board-size', `${boardSize}px`);
+  syncEvalBar();
+}
+
+function syncEvalBar() {
+  const evalWrap = document.querySelector('.evalwrap');
+  if (!evalWrap) return;
+  const boardSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--board-size'), 10) || 512;
+  if (window.innerWidth < 600) {
+    evalWrap.style.height = '14px';
+  } else {
+    evalWrap.style.height = `${boardSize}px`;
+  }
+  setEval(S.currentEval.score);
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function pieceUrl(piece) {
+  return `https://lichess1.org/assets/piece/${S.theme}/${piece.color}${piece.type.toUpperCase()}.svg`;
+}
+
+function renderBoard() {
+  if (S.activeTab === 'play') {
+    renderInteractiveBoard(S.playChess, S.playLastFrom, S.playLastTo, S.playSel, handlePlayClick);
+  } else {
+    const lastFrom = S.moveIdx >= 0 ? S.moves[S.moveIdx]?.from : null;
+    const lastTo = S.moveIdx >= 0 ? S.moves[S.moveIdx]?.to : null;
+    renderStaticBoard(S.reviewChess, lastFrom, lastTo);
+  }
+  updateMaterialAndCaptures();
+  updateCoords();
+}
+
+function renderStaticBoard(chess, hlFrom, hlTo) {
+  buildBoard(chess, hlFrom, hlTo, null, [], null);
+}
+
+function renderInteractiveBoard(chess, hlFrom, hlTo, selSq, clickHandler) {
+  const legal = selSq
+    ? chess.moves({ square: selSq, verbose: true }).map(m => ({ sq: m.to }))
+    : [];
+  buildBoard(chess, hlFrom, hlTo, selSq, legal, clickHandler);
+}
+
+function clearBoardHighlights(board) {
+  Array.from(board.children).forEach(square => {
+    square.classList.remove('hl-from', 'hl-to', 'hl-sel');
+    square.removeAttribute('style');
+  });
+}
+
+function buildBoard(chess, hlFrom, hlTo, selSq, legal, clickHandler) {
+  const board = document.getElementById('board');
+  clearBoardHighlights(board);
+  board.innerHTML = '';
+  const pos = chess.board();
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const dr = S.flipped ? 7 - r : r;
+      const dc = S.flipped ? 7 - c : c;
+      const rank = 8 - dr;
+      const file = String.fromCharCode(97 + dc);
+      const sqName = file + rank;
+      const piece = pos[dr][dc];
+      const sq = document.createElement('div');
+      sq.className = `sq ${((dr + dc) % 2 === 0) ? 'light' : 'dark'}`;
+      if (sqName === hlFrom) sq.classList.add('hl-from');
+      if (sqName === hlTo) sq.classList.add('hl-to');
+      if (sqName === selSq) sq.classList.add('hl-sel');
+      if (piece) {
+        const img = document.createElement('img');
+        img.src = pieceUrl(piece);
+        img.alt = piece.color + piece.type;
+        sq.appendChild(img);
+      }
+      if (legal.some(l => l.sq === sqName)) {
+        const ind = document.createElement('div');
+        ind.className = piece ? 'ring' : 'dot';
+        sq.appendChild(ind);
+      }
+      if (clickHandler) sq.addEventListener('click', () => clickHandler(sqName));
+      board.appendChild(sq);
+    }
+  }
+}
+
+function updateCoords() {
+  const ranks = S.flipped ? ['1', '2', '3', '4', '5', '6', '7', '8'] : ['8', '7', '6', '5', '4', '3', '2', '1'];
+  const files = S.flipped ? ['h', 'g', 'f', 'e', 'd', 'c', 'b', 'a'] : ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+  document.getElementById('cRank').innerHTML = ranks.map(r => `<span>${r}</span>`).join('');
+  document.getElementById('cFile').innerHTML = files.map(f => `<span>${f}</span>`).join('');
+}
+
+function setEval(score) {
+  S.currentEval.score = score || 0;
+  S.currentEval.whiteCp = Math.round((score || 0) * 100);
+  const clamped = clamp(score || 0, -5, 5);
+  const pct = 50 + (clamped / 5) * 45;
+  const fill = document.getElementById('evalFill');
+  if (!fill) return;
+  if (window.innerWidth < 600) {
+    fill.style.width = `${pct}%`;
+    fill.style.height = '100%';
+  } else {
+    fill.style.width = '100%';
+    fill.style.height = `${pct}%`;
+  }
+}
+
+async function refreshCurrentEval(multiPv = 3) {
+  const fen = getCurrentFen();
+  const evalData = await fetchEval(fen, multiPv);
+  setEval(parseEval(evalData).score);
+}
+
+function getActiveChess() {
+  if (S.activeTab === 'play') return S.playChess;
+  return S.reviewChess;
+}
+
+function renderCapturedPieces(containerId, color, counts) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  ['q', 'r', 'b', 'n', 'p'].forEach(type => {
+    const count = counts[type] || 0;
+    if (!count) return;
+    const item = document.createElement('span');
+    item.className = 'captured-item';
+    const img = document.createElement('img');
+    img.className = 'captured-piece';
+    img.dataset.color = color;
+    img.src = `https://lichess1.org/assets/piece/${S.theme}/${color}${type.toUpperCase()}.svg`;
+    img.alt = `${color}${type}`;
+    item.appendChild(img);
+    if (count > 1) {
+      const mult = document.createElement('span');
+      mult.textContent = `×${count}`;
+      item.appendChild(mult);
+    }
+    container.appendChild(item);
+  });
+}
+
+function updateMaterialAndCaptures() {
+  const chess = getActiveChess();
+  const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+  const counts = {
+    w: { p: 0, n: 0, b: 0, r: 0, q: 0 },
+    b: { p: 0, n: 0, b: 0, r: 0, q: 0 },
+  };
+  chess.board().flat().forEach(piece => {
+    if (piece && counts[piece.color][piece.type] !== undefined) {
+      counts[piece.color][piece.type] += 1;
+    }
+  });
+  const capturedWhite = { p: 8 - counts.w.p, n: 2 - counts.w.n, b: 2 - counts.w.b, r: 2 - counts.w.r, q: 1 - counts.w.q };
+  const capturedBlack = { p: 8 - counts.b.p, n: 2 - counts.b.n, b: 2 - counts.b.b, r: 2 - counts.b.r, q: 1 - counts.b.q };
+  renderCapturedPieces('capBlack', 'w', capturedWhite);
+  renderCapturedPieces('capWhite', 'b', capturedBlack);
+
+  function getMaterialDiff(currentChess) {
+    let white = 0;
+    let black = 0;
+    currentChess.board().forEach(row => row.forEach(sq => {
+      if (!sq) return;
+      const val = PIECE_VALUES[sq.type];
+      if (sq.color === 'w') white += val;
+      else black += val;
+    }));
+    return white - black;
+  }
+  const diff = getMaterialDiff(chess);
+
+  const whiteEl = document.getElementById('pWhiteMaterial');
+  const blackEl = document.getElementById('pBlackMaterial');
+  if (whiteEl) {
+    whiteEl.textContent = diff > 0 ? `+${diff}` : '';
+    whiteEl.className = 'material-adv';
+  }
+  if (blackEl) {
+    blackEl.textContent = diff < 0 ? `+${Math.abs(diff)}` : '';
+    blackEl.className = 'material-adv';
+  }
+}
+
+function syncPlayerLabels() {
+  document.getElementById('pWhiteName').textContent = S.whiteName || t('whiteSideName');
+  document.getElementById('pBlackName').textContent = S.blackName || t('blackSideName');
+  document.getElementById('pWhiteRating').textContent = S.whiteRating;
+  document.getElementById('pBlackRating').textContent = S.blackRating;
+  updateMaterialAndCaptures();
+}
+
+function setSource(src) {
+  S.importSource = src;
+  document.getElementById('btnLichess').classList.toggle('active', src === 'lichess');
+  document.getElementById('btnChesscom').classList.toggle('active', src === 'chesscom');
+  const lichessField = document.getElementById('lichessUserField');
+  const chesscomField = document.getElementById('chesscomUserField');
+  if (lichessField) lichessField.style.display = src === 'lichess' ? '' : 'none';
+  if (chesscomField) chesscomField.style.display = src === 'chesscom' ? '' : 'none';
+}
+
+async function fetchGames() {
+  // Reasonable decision: both usernames stay visible for analysis, while the source toggle decides which one the single-game Fetch action uses.
+  const user = S.importSource === 'lichess'
+    ? document.getElementById('inLichessUser').value.trim()
+    : document.getElementById('inChesscomUser').value.trim();
+  if (!user) return;
+  const list = document.getElementById('gamesList');
+  list.innerHTML = `<div class="subtle" style="padding:10px 12px;">${escapeHtml(t('fetchingGames'))}</div>`;
+  try {
+    const sinceMs = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    const untilMs = Date.now();
+    S.games = S.importSource === 'lichess'
+      ? await fetchLichessGames(user, sinceMs, untilMs, 200)
+      : await fetchChessComRecentGames(user, sinceMs);
+    renderGamesList();
+  } catch (e) {
+    list.innerHTML = `<div class="subtle" style="padding:10px 12px; color:var(--red);">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function fetchLichessGames(user, sinceMs, untilMs, max = 200) {
+  const url = new URL(`https://lichess.org/api/games/user/${encodeURIComponent(user)}`);
+  url.searchParams.set('tags', 'true');
+  url.searchParams.set('opening', 'true');
+  url.searchParams.set('pgnInJson', 'true');
+  url.searchParams.set('since', String(sinceMs));
+  url.searchParams.set('until', String(untilMs));
+  url.searchParams.set('max', String(max));
+  const resp = await fetch(url.toString(), { headers: { Accept: 'application/x-ndjson' } });
+  if (!resp.ok) throw new Error(t('lichessHttpError', { status: resp.status }));
+  const text = await resp.text();
+  return text.trim().split('\n').filter(Boolean).map(line => {
+    const g = JSON.parse(line);
+    const wp = g.players?.white;
+    const bp = g.players?.black;
+    return {
+      platform: 'lichess',
+      whiteName: wp?.user?.name || t('unknownPlayer'),
+      blackName: bp?.user?.name || t('unknownPlayer'),
+      whiteRating: wp?.rating || '',
+      blackRating: bp?.rating || '',
+      result: g.winner === 'white' ? '1-0' : g.winner === 'black' ? '0-1' : '1/2-1/2',
+      opening: g.opening?.name || parsePgnTag(g.pgn || '', 'Opening') || t('unknownOpening'),
+      pgn: g.pgn || '',
+      endedAt: g.lastMoveAt || g.createdAt || Date.now(),
+    };
+  });
+}
+
+async function fetchChessComRecentGames(user, sinceMs) {
+  let archResp;
+  try {
+    archResp = await fetch(`https://api.chess.com/pub/player/${encodeURIComponent(user)}/games/archives`);
+  } catch (e) {
+    throw new Error(t('chesscomBlocked'));
+  }
+  if (!archResp.ok) {
+    throw new Error(t('chesscomBlocked'));
+  }
+  const data = await archResp.json();
+  const archives = data.archives || [];
+  const archiveUrls = archives.slice(-2);
+  const sinceSec = Math.floor(sinceMs / 1000);
+  const games = [];
+  for (const url of archiveUrls) {
+    let resp;
+    try {
+      resp = await fetch(url);
+    } catch (e) {
+    throw new Error(t('chesscomBlocked'));
+    }
+    if (!resp.ok) {
+    throw new Error(t('chesscomBlocked'));
+    }
+    const monthData = await resp.json();
+    for (const g of monthData.games || []) {
+      if ((g.end_time || 0) < sinceSec) continue;
+      const pgn = g.pgn || '';
+      games.push({
+        platform: 'chesscom',
+        whiteName: g.white?.username || t('unknownPlayer'),
+        blackName: g.black?.username || t('unknownPlayer'),
+        whiteRating: g.white?.rating || '',
+        blackRating: g.black?.rating || '',
+        result: parsePgnTag(pgn, 'Result') || '*',
+        opening: parsePgnTag(pgn, 'Opening') || parseEcoUrlName(parsePgnTag(pgn, 'ECOUrl')) || t('unknownOpening'),
+        pgn,
+        endedAt: (g.end_time || 0) * 1000,
+      });
+    }
+  }
+  games.sort((a, b) => b.endedAt - a.endedAt);
+  return games;
+}
+
+function renderGamesList() {
+  const list = document.getElementById('gamesList');
+  if (!S.games.length) {
+    list.innerHTML = `<div class="subtle" style="padding:10px 12px;">${escapeHtml(t('noGamesFound'))}</div>`;
+    return;
+  }
+  list.innerHTML = S.games.map((g, i) => {
+    const username = getImportedUsernameForPlatform(g.platform);
+    const playerColor = inferPlayerColor(g, username);
+    const perspective = playerColor ? resultForPlayer(g.result, playerColor) : 'draw';
+    const display = perspective === 'win' ? '✓' : perspective === 'loss' ? '✗' : '=';
+    return `<div class="gitem" onclick="loadGame(${i})">
+      <div><span class="gresult ${perspective}">${display}</span><span class="gplayers">${escapeHtml(g.whiteName)} ${escapeHtml(t('versus'))} ${escapeHtml(g.blackName)}</span></div>
+      <div class="gopening">${escapeHtml(g.opening || t('unknownOpening'))}</div>
+    </div>`;
+  }).join('');
+}
+
+function parsePgnTag(pgn, tag) {
+  return pgn.match(new RegExp(`\\[${tag} "([^"]+)"\\]`))?.[1] || '';
+}
+
+function parseEcoUrlName(url) {
+  if (!url) return '';
+  return url.split('/').pop().replace(/-/g, ' ');
+}
+
+function getImportedUsernameForPlatform(platform) {
+  return (platform === 'lichess'
+    ? document.getElementById('inLichessUser').value.trim()
+    : document.getElementById('inChesscomUser').value.trim()).toLowerCase();
+}
+
+function applyReviewAutoFlip(game) {
+  const playerColor = inferPlayerColor(game, getImportedUsernameForPlatform(game.platform));
+  if (playerColor === 'b') S.flipped = true;
+  if (playerColor === 'w') S.flipped = false;
+}
+
+function applyPlayAutoFlip() {
+  S.flipped = S.playUserColor === 'b';
+}
+
+function loadGame(idx) {
+  const game = S.games[idx];
+  if (!game) return;
+  const history = parsePgnHistory(game.pgn);
+  if (!history) {
+    alert(t('parsePgnError'));
+    return;
+  }
+  S.moves = [];
+  const tmp = new Chess();
+  history.forEach(mv => {
+    const beforeFen = tmp.fen();
+    tmp.move(mv);
+    S.moves.push({
+      san: mv.san,
+      from: mv.from,
+      to: mv.to,
+      color: mv.color,
+      fen: tmp.fen(),
+      beforeFen,
+      moveNumber: Math.floor((S.moves.length + 2) / 2),
+    });
+  });
+  S.reviewChess = new Chess();
+  S.moveIdx = -1;
+  S.moveQualities = {};
+  S.moveEvalToken += 1;
+  S.moveEvalLoading = false;
+  S.whiteName = game.whiteName;
+  S.blackName = game.blackName;
+  S.whiteRating = game.whiteRating ? `(${game.whiteRating})` : '';
+  S.blackRating = game.blackRating ? `(${game.blackRating})` : '';
+  S.opening = game.opening || '';
+  applyReviewAutoFlip(game);
+  syncPlayerLabels();
+  document.getElementById('openingLbl').textContent = S.opening;
+  renderMoveList();
+  renderBoard();
+  void analyzeMoveQualitiesBackground();
+  void refreshCurrentEval(3);
+  document.getElementById('coachReview').textContent = t('reviewCoachLoaded');
+}
+
+function renderMoveList() {
+  const grid = document.getElementById('movesGrid');
+  grid.innerHTML = '';
+  updateMoveEvalStatus();
+  for (let i = 0; i < S.moves.length; i += 2) {
+    const num = document.createElement('span');
+    num.className = 'mnum';
+    num.textContent = `${i / 2 + 1}.`;
+    grid.appendChild(num);
+    addMoveToken(grid, i);
+    if (i + 1 < S.moves.length) addMoveToken(grid, i + 1);
+  }
+}
+
+function addMoveToken(grid, idx) {
+  const sp = document.createElement('span');
+  const quality = S.moveQualities[idx];
+  sp.className = 'mtok' + (quality?.cls ? ` ${quality.cls}` : '') + (idx === S.moveIdx ? ' cur' : '');
+  sp.textContent = `${S.moves[idx].san}${quality?.suffix ? ` ${quality.suffix}` : ''}`;
+  sp.addEventListener('click', () => goTo(idx));
+  grid.appendChild(sp);
+}
+
+function goTo(idx) {
+  if (idx < 0 || idx >= S.moves.length) return;
+  const chess = new Chess();
+  for (let i = 0; i <= idx; i++) chess.move(S.moves[i].san);
+  S.reviewChess = chess;
+  S.moveIdx = idx;
+  renderMoveList();
+  renderBoard();
+  document.querySelector('.mtok.cur')?.scrollIntoView({ block: 'nearest' });
+  if (!hasGroqKey()) {
+    showToast(t('groqToast'));
+    return;
+  }
+  void onMoveReview(S.moves[idx]);
+}
+
+function goStart() {
+  S.reviewChess = new Chess();
+  S.moveIdx = -1;
+  renderMoveList();
+  renderBoard();
+  void refreshCurrentEval(3);
+  document.getElementById('coachReview').textContent = t('reviewStartingPosition');
+}
+
+function updateMoveEvalStatus() {
+  const el = document.getElementById('movesEvalStatus');
+  if (!el) return;
+  if (S.moveEvalLoading) {
+    el.innerHTML = `${t('evalLoading')} <span class="dots"><span></span><span></span><span></span></span>`;
+  } else {
+    el.textContent = '';
+  }
+}
+
+function classifyMoveQuality(lossCp) {
+  if (lossCp <= -50) return { cls: 'brilliant', suffix: '!!' };
+  if (lossCp >= 200) return { cls: 'blunder', suffix: '??' };
+  if (lossCp >= 101) return { cls: 'mistake', suffix: '?' };
+  if (lossCp >= 51) return { cls: 'inaccuracy', suffix: '?!' };
+  return { cls: '', suffix: '' };
+}
+
+async function delayedEvalFetch(fen, multiPv = 3) {
+  await sleep(300);
+  return fetchEval(fen, multiPv);
+}
+
+async function analyzeMoveQualitiesBackground() {
+  const token = ++S.moveEvalToken;
+  S.moveEvalLoading = true;
+  renderMoveList();
+  for (let i = 0; i < S.moves.length; i++) {
+    if (token !== S.moveEvalToken) return;
+    const move = S.moves[i];
+    const beforeEval = parseEval(await delayedEvalFetch(move.beforeFen, 3));
+    if (token !== S.moveEvalToken) return;
+    const afterEval = parseEval(await delayedEvalFetch(move.fen, 3));
+    if (token !== S.moveEvalToken) return;
+    const lossCp = evalLossCp(beforeEval.score, afterEval.score, move.color);
+    S.moveQualities[i] = classifyMoveQuality(lossCp);
+    renderMoveList();
+  }
+  if (token !== S.moveEvalToken) return;
+  S.moveEvalLoading = false;
+  renderMoveList();
+}
+
+function goPrev() {
+  if (S.moveIdx <= 0) return goStart();
+  goTo(S.moveIdx - 1);
+}
+
+function goNext() {
+  if (!S.moves.length) return;
+  goTo(Math.min(S.moveIdx + 1, S.moves.length - 1));
+}
+
+function goEnd() {
+  if (!S.moves.length) return;
+  goTo(S.moves.length - 1);
+}
+
+async function onMoveReview(move) {
+  try {
+    const beforeEvalData = await fetchEval(move.beforeFen, 3);
+    const afterEvalData = await fetchEval(move.fen, 3);
+    const beforeEval = parseEval(beforeEvalData);
+    const afterEval = parseEval(afterEvalData);
+    setEval(afterEval.score);
+    const bestLine = firstMoves(beforeEvalData?.pvs?.[0]?.moves || '', 6);
+    const ctx = {
+      mode: 'Review Game',
+      san: move.san,
+      color: move.color === 'w' ? 'White' : 'Black',
+      from: move.from,
+      to: move.to,
+      moveNumber: move.moveNumber,
+      beforeFen: move.beforeFen,
+      afterFen: move.fen,
+      evalBefore: beforeEval.score,
+      evalAfter: afterEval.score,
+      bestLine,
+      playerElo: inferMovePlayerElo(move.color),
+    };
+    S.lastMoveContext = ctx;
+    document.getElementById('coachReview').textContent = '';
+  } catch (e) {
+    document.getElementById('coachReview').textContent = '';
+    appendGroqErrorToChat(e);
+  }
+}
+
+function inferMovePlayerElo(color) {
+  if (color === 'w') return extractDigits(S.whiteRating) || 'unknown';
+  return extractDigits(S.blackRating) || 'unknown';
+}
+
+function extractDigits(text) {
+  const m = String(text || '').match(/\d+/);
+  return m ? m[0] : null;
+}
+
+function resetPlay() {
+  maybeSummarizeFinishedPlayGame('new game');
+  clearTimeout(S.playCoinTimer);
+  S.playChess = new Chess();
+  S.playSel = null;
+  S.playLastFrom = null;
+  S.playLastTo = null;
+  S.playPending = false;
+  const choice = document.getElementById('selPlayColor').value;
+  if (choice === 'random') {
+    S.playUserColor = Math.random() < 0.5 ? 'w' : 'b';
+    const msg = S.playUserColor === 'w' ? t('playGotWhite') : t('playGotBlack');
+    document.getElementById('coachPlay').textContent = msg;
+    S.playCoinTimer = setTimeout(() => startPlayGame(), 2000);
+  } else {
+    S.playUserColor = choice;
+    startPlayGame();
+  }
+}
+
+function startPlayGame() {
+  S.playChess = new Chess();
+  S.playSel = null;
+  S.playLastFrom = null;
+  S.playLastTo = null;
+  S.playPending = false;
+  S.playMoveCount = 0;
+  S.playMistakes = [];
+  S.chatHistory = [];
+  S.lastCommentEval = null;
+  S.lastCommentMove = 0;
+  if (S.playUserColor === 'w') {
+    S.whiteName = t('youName');
+    S.blackName = t('kibitzerName');
+  } else {
+    S.whiteName = t('kibitzerName');
+    S.blackName = t('youName');
+  }
+  applyPlayAutoFlip();
+  S.whiteRating = '';
+  S.blackRating = '';
+  syncPlayerLabels();
+  renderBoard();
+  void refreshCurrentEval(5);
+  document.getElementById('coachPlay').textContent = t('coachIntro');
+  setPlayStatus(S.playUserColor === 'w' ? t('yourMove') : t('kibitzerOpens'));
+  if (S.playUserColor === 'b') {
+    void coachReplyMove(null);
+  }
+}
+
+function setPlayStatus(text) {
+  document.getElementById('playStatus').textContent = text;
+}
+
+function handlePlayClick(sq) {
+  const chess = S.playChess;
+  if (S.playPending || chess.game_over()) return;
+  if (chess.turn() !== S.playUserColor) return;
+  const piece = chess.get(sq);
+  if (S.playSel) {
+    const mv = chess.moves({ square: S.playSel, verbose: true }).find(m => m.to === sq);
+    if (mv) {
+      const beforeFen = chess.fen();
+      const result = chess.move({ from: S.playSel, to: sq, promotion: 'q' });
+      if (result) {
+        S.playLastFrom = S.playSel;
+        S.playLastTo = sq;
+        S.playSel = null;
+        renderBoard();
+        void onPlayerMovePlayed(beforeFen, result);
+        return;
+      }
+    }
+    if (piece && piece.color === chess.turn()) {
+      S.playSel = sq;
+      renderBoard();
+      return;
+    }
+    S.playSel = null;
+    renderBoard();
+    return;
+  }
+  if (piece && piece.color === chess.turn()) {
+    S.playSel = sq;
+    renderBoard();
+  }
+}
+
+async function onPlayerMovePlayed(beforeFen, moveResult) {
+  S.playPending = true;
+  setPlayStatus(t('thinking'));
+  document.getElementById('coachPlay').textContent = '';
+  const afterFen = S.playChess.fen();
+  const beforeEvalData = await fetchEvalWithRetry(beforeFen, 5);
+  const afterEvalData = await fetchEvalWithRetry(afterFen, 5);
+  const beforeEval = parseEval(beforeEvalData);
+  const afterEval = parseEval(afterEvalData);
+  const moveCtx = {
+    mode: 'Play vs Coach',
+    san: moveResult.san,
+    color: moveResult.color === 'w' ? 'White' : 'Black',
+    colorCode: moveResult.color,
+    piece: moveResult.piece,
+    flags: moveResult.flags,
+    from: moveResult.from,
+    to: moveResult.to,
+    moveNumber: Math.floor((S.playChess.history().length + 1) / 2),
+    beforeFen,
+    afterFen,
+    evalBefore: beforeEval.score,
+    evalAfter: afterEval.score,
+    bestLine: firstMoves(afterEvalData?.pvs?.[0]?.moves || '', 6),
+    playerElo: 'unknown',
+  };
+  S.lastMoveContext = moveCtx;
+  const playerDeltaCp = getCommentaryDeltaCp(moveCtx);
+  if (playerDeltaCp !== null && playerDeltaCp < -100) {
+    S.playMistakes.push({
+      num: moveCtx.moveNumber,
+      san: moveCtx.san,
+      delta: Math.abs(playerDeltaCp / 100).toFixed(1),
+    });
+  }
+  if (S.playChess.game_over()) {
+    await refreshCurrentEval(5);
+    document.getElementById('coachPlay').textContent = t('gameOver');
+    maybeSummarizeFinishedPlayGame(summarizeGameResult(S.playChess));
+    S.playPending = false;
+    return;
+  }
+  await refreshCurrentEval(5);
+  await coachReplyMove({ playerSan: moveResult.san, playerContext: moveCtx });
+}
+
+async function coachReplyMove(playerData) {
+  // Important: take the FEN after the player's move has already been applied.
+  const beforeCoachFen = S.playChess.fen();
+  let evalData = await fetchEval(beforeCoachFen, 3);
+  let bestUci = evalData?.pvs?.[0]?.moves?.split(' ')[0];
+  if (!bestUci) {
+    await sleep(800);
+    evalData = await fetchEval(beforeCoachFen, 3);
+    bestUci = evalData?.pvs?.[0]?.moves?.split(' ')[0];
+  }
+  if (!bestUci) {
+    document.getElementById('coachPlay').textContent = 'Thinking...';
+    await sleep(2000);
+    evalData = await fetchEval(beforeCoachFen, 3);
+    bestUci = evalData?.pvs?.[0]?.moves?.split(' ')[0];
+  }
+  if (!bestUci) {
+    document.getElementById('coachPlay').textContent = 'Connection issue — try making your move again';
+    // Reasonable recovery choice: if the failure happened after a player move, undo it so they can retry.
+    if (playerData?.playerContext) {
+      S.playChess.undo();
+      S.playLastFrom = null;
+      S.playLastTo = null;
+      S.playSel = null;
+      renderBoard();
+      await refreshCurrentEval(5);
+      S.lastMoveContext = playerData.playerContext;
+      setPlayStatus(t('yourMove'));
+    } else {
+      setPlayStatus(t('kibitzerOpens'));
+    }
+    S.playPending = false;
+    return;
+  }
+  const moveChoice = uciToMove(bestUci);
+  await sleep(600);
+  const coachMove = S.playChess.move(moveChoice);
+  if (!coachMove) {
+    document.getElementById('coachPlay').textContent = 'Connection issue — try making your move again';
+    S.playPending = false;
+    return;
+  }
+  S.playLastFrom = coachMove.from;
+  S.playLastTo = coachMove.to;
+  renderBoard();
+  const afterCoachEval = parseEval(await fetchEvalWithRetry(S.playChess.fen(), 5));
+  await refreshCurrentEval(5);
+  const coachCtx = {
+    mode: 'Play vs Coach',
+    san: coachMove.san,
+    color: coachMove.color === 'w' ? 'White' : 'Black',
+    piece: coachMove.piece,
+    flags: coachMove.flags,
+    playerSan: playerData?.playerSan || 'none',
+    coachReplySan: coachMove.san,
+    from: coachMove.from,
+    to: coachMove.to,
+    moveNumber: Math.floor((S.playChess.history().length + 1) / 2),
+    beforeFen: beforeCoachFen,
+    afterFen: S.playChess.fen(),
+    evalBefore: parseEval(evalData).score,
+    evalAfter: afterCoachEval.score,
+    bestLine: firstMoves(evalData?.pvs?.[0]?.moves || '', 6),
+    playerElo: 'unknown',
+  };
+  S.lastMoveContext = coachCtx;
+  setPlayStatus(S.playChess.game_over() ? t('gameFinished') : t('yourMove'));
+  S.playPending = false;
+  if (playerData?.playerSan) {
+    S.playMoveCount += 1;
+    const deltaCp = getCommentaryDeltaCp(playerData.playerContext);
+    const bestSan = getBestSanFromCtx(playerData.playerContext);
+    const whiteSan = S.playUserColor === 'w' ? playerData.playerSan : coachCtx.san;
+    const blackSan = S.playUserColor === 'w' ? coachCtx.san : playerData.playerSan;
+    void (async () => {
+      try {
+        const comment = await buildKibitzerComment(whiteSan, blackSan, S.playMoveCount, deltaCp || 0, bestSan);
+        document.getElementById('coachPlay').textContent = comment;
+      } catch (e) {
+        document.getElementById('coachPlay').textContent = formatGroqErrorMessage(e);
+      }
+    })();
+  }
+}
+
+function parsePgnHistory(pgn) {
+  const chess = new Chess();
+  let ok = chess.load_pgn(pgn || '');
+  if (!ok) ok = chess.load_pgn((pgn || '').replace(/\[.*?\]\s*/gs, '').trim());
+  return ok ? chess.history({ verbose: true }) : null;
+}
+
+async function fetchEval(fen, multiPv = 3) {
+  const key = `${fen}|${multiPv}`;
+  if (S.evalCache[key]) return S.evalCache[key];
+  try {
+    const resp = await fetch(`https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(fen)}&multiPv=${multiPv}`);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    S.evalCache[key] = data;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchEvalWithRetry(fen, multiPv = 3, retryDelayMs = 500) {
+  let data = await fetchEval(fen, multiPv);
+  if (data?.pvs?.length) return data;
+  await sleep(retryDelayMs);
+  data = await fetchEval(fen, multiPv);
+  return data;
+}
+
+function parseEval(data) {
+  if (!data?.pvs?.[0]) return { score: 0, cp: 0 };
+  const pv = data.pvs[0];
+  if (pv.mate !== undefined) {
+    return { score: pv.mate > 0 ? 10 : -10, cp: pv.mate > 0 ? 10000 : -10000 };
+  }
+  return { score: (pv.cp || 0) / 100, cp: pv.cp || 0 };
+}
+
+function firstMoves(line, count) {
+  return (line || '').split(' ').filter(Boolean).slice(0, count).join(' ');
+}
+
+function uciToMove(uci) {
+  return { from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.length > 4 ? uci[4] : undefined };
+}
+
+function uciToSan(chess, uci) {
+  const from = uci.slice(0, 2);
+  const to = uci.slice(2, 4);
+  const promotion = uci[4] || undefined;
+  const move = chess.move({ from, to, promotion });
+  if (!move) return uci;
+  const san = move.san;
+  chess.undo();
+  return san;
+}
+
+function evalLossCp(beforeScore, afterScore, playerColor) {
+  const beforeCp = Math.round(beforeScore * 100);
+  const afterCp = Math.round(afterScore * 100);
+  return playerColor === 'w' ? beforeCp - afterCp : afterCp - beforeCp;
+}
+
+function pieceTypeName(type) {
+  return ({
+    p: 'pawn',
+    n: 'knight',
+    b: 'bishop',
+    r: 'rook',
+    q: 'queen',
+    k: 'king',
+  })[type] || 'piece';
+}
+
+function materialCounts(chess) {
+  const counts = {
+    w: { p: 0, n: 0, b: 0, r: 0, q: 0, k: 0 },
+    b: { p: 0, n: 0, b: 0, r: 0, q: 0, k: 0 },
+  };
+  chess.board().flat().forEach(piece => {
+    if (piece && counts[piece.color][piece.type] !== undefined) counts[piece.color][piece.type] += 1;
+  });
+  return counts;
+}
+
+function materialListText(counts) {
+  const parts = [];
+  if (counts.k) parts.push('king');
+  if (counts.q) parts.push(counts.q === 1 ? 'queen' : `queens x${counts.q}`);
+  if (counts.r) parts.push(counts.r === 1 ? 'rook' : `rooks x${counts.r}`);
+  if (counts.b) parts.push(counts.b === 1 ? 'bishop' : `bishops x${counts.b}`);
+  if (counts.n) parts.push(counts.n === 1 ? 'knight' : `knights x${counts.n}`);
+  if (counts.p) parts.push(counts.p === 1 ? 'pawn' : `pawns x${counts.p}`);
+  return parts.join(', ') || 'none';
+}
+
+function materialDiffTextFromCounts(counts) {
+  const white = counts.w.p + counts.w.n * 3 + counts.w.b * 3 + counts.w.r * 5 + counts.w.q * 9;
+  const black = counts.b.p + counts.b.n * 3 + counts.b.b * 3 + counts.b.r * 5 + counts.b.q * 9;
+  if (white > black) return `+${white - black} for White`;
+  if (black > white) return `+${black - white} for Black`;
+  return 'equal';
+}
+
+function capturedPieceFromMove(ctx) {
+  if (!ctx?.beforeFen || !ctx?.from || !ctx?.to) return 'none';
+  const before = new Chess(ctx.beforeFen);
+  const moving = before.get(ctx.from);
+  const target = before.get(ctx.to);
+  if (target && moving && target.color !== moving.color) return pieceTypeName(target.type);
+  if (moving?.type === 'p' && ctx.from[0] !== ctx.to[0] && !target) {
+    const epSquare = `${ctx.to[0]}${ctx.from[1]}`;
+    const epTarget = before.get(epSquare);
+    if (epTarget && epTarget.color !== moving.color) return pieceTypeName(epTarget.type);
+  }
+  return 'none';
+}
+
+function buildMoveFacts(ctx) {
+  const after = new Chess(ctx?.afterFen || getCurrentFen());
+  const counts = materialCounts(after);
+  const capturedPiece = capturedPieceFromMove(ctx);
+  const wasCapture = capturedPiece !== 'none';
+  const wasCheck = /[+#]/.test(ctx?.san || '');
+  return {
+    whiteMaterial: materialListText(counts.w),
+    blackMaterial: materialListText(counts.b),
+    materialDiff: materialDiffTextFromCounts(counts),
+    capturedPiece,
+    wasCapture: wasCapture ? 'yes' : 'no',
+    wasCheck: wasCheck ? 'yes' : 'no',
+    kingInCheckAfter: after.in_check() ? 'yes' : 'no',
+    pieceCount: countBoardPieces(after),
+    sideToMove: after.turn() === 'w' ? 'White' : 'Black',
+  };
+}
+
+function moveWasCapture(ctx) {
+  return capturedPieceFromMove(ctx) !== 'none';
+}
+
+function moveWasCheck(ctx) {
+  return /[+#]/.test(ctx?.san || '');
+}
+
+function moveToUci(ctx) {
+  if (!ctx?.from || !ctx?.to) return 'none';
+  return `${ctx.from}${ctx.to}${ctx.promotion || ''}`;
+}
+
+function getCommentaryDeltaCp(ctx) {
+  const beforeCpWhite = Math.round(Number(ctx?.evalBefore || 0) * 100);
+  const afterCpWhite = Math.round(Number(ctx?.evalAfter || 0) * 100);
+  if (!Number.isFinite(beforeCpWhite) || !Number.isFinite(afterCpWhite)) return null;
+  return ctx?.color === 'Black'
+    ? beforeCpWhite - afterCpWhite
+    : afterCpWhite - beforeCpWhite;
+}
+
+function getBestSanFromCtx(ctx) {
+  const bestUci = String(ctx?.bestLine || '').split(' ').filter(Boolean)[0] || '';
+  if (!bestUci) return 'none';
+  return ctx?.beforeFen ? uciToSan(new Chess(ctx.beforeFen), bestUci) : bestUci;
+}
+
+function buildKibitzerComment(whiteSan, blackSan, moveNum, deltaCp, bestSan) {
+  const system = withLanguagePrompt(`You are Kibitzer. Brooklyn chess observer. 
+One sentence only. Translate the numbers into plain English.
+Never describe the board. Never mention piece locations.
+Direct. No corporate language.`);
+
+  const user = `Move ${moveNum}: White played ${whiteSan}, 
+Black played ${blackSan}.
+Eval changed ${(deltaCp / 100).toFixed(1)} pawns.
+${Math.abs(deltaCp) > 100 ? `Best was ${bestSan}.` : ''}
+Comment.`;
+
+  return callGroqWithSystemPrompt(system, user, 80);
+}
+
+function fenToPlainEnglish(chess) {
+  const pieces = [];
+  chess.board().forEach((row, r) => {
+    row.forEach((sq, f) => {
+      if (!sq) return;
+      const file = 'abcdefgh'[f];
+      const rank = 8 - r;
+      const color = sq.color === 'w' ? 'White' : 'Black';
+      const type = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' }[sq.type];
+      pieces.push(`${color} ${type} on ${file}${rank}`);
+    });
+  });
+  return pieces.join(', ');
+}
+
+function buildChatUserMessage(chess, evalData, userMessage) {
+  const cp = evalData?.pvs?.[0]?.cp;
+  const evalText = cp !== undefined ? (cp / 100).toFixed(1) : 'unknown';
+  const favoredColor = cp === undefined ? 'unknown' : cp > 0 ? 'White' : cp < 0 ? 'Black' : 'neither side';
+  return `Board: ${fenToPlainEnglish(chess)}
+Eval: ${evalText} favoring ${favoredColor}
+Last 6 moves: ${chess.history().slice(-6).join(' ') || 'none'}
+Move number: ${Math.ceil(chess.history().length / 2)}
+
+Question: ${userMessage}`;
+}
+
+
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+  if (!hasGroqKey()) {
+    showToast(t('groqToast'));
+    openModal();
+    return;
+  }
+  input.value = '';
+  appendChatMessage(msg, 'user');
+  const loadingId = appendLoading('chatMsgs');
+  try {
+    const chatChess = getChatChess();
+    const chatEvalData = await fetchEvalWithRetry(chatChess.fen(), 3, 800);
+    const reply = await callGroqWithContext(buildChatUserMessage(chatChess, chatEvalData, msg), buildChatRequestContext(chatChess, chatEvalData), 350);
+    document.getElementById(loadingId)?.remove();
+    appendChatMessage(reply, 'asst');
+    S.chatHistory.push(
+      { role: 'user', content: msg },
+      { role: 'assistant', content: reply }
+    );
+    if (S.chatHistory.length > 12) S.chatHistory.splice(0, S.chatHistory.length - 12);
+  } catch (e) {
+    document.getElementById(loadingId)?.remove();
+    appendGroqErrorToChat(e);
+  }
+}
+
+function buildGroqSystemPrompt(ctx) {
+  return withLanguagePrompt(`You are Kibitzer, a Brooklyn chess observer.
+Answer questions about chess theory, strategy, and concepts.
+You have the full board position — use it.
+Be honest if uncertain about specific tactics.
+Direct. Warm. Brooklyn style.`);
+}
+
+function buildSummarySystemPrompt() {
+  return withLanguagePrompt(`You are a Brooklyn chess coach.
+Honest. Direct. No fluff.`);
+}
+
+function withLanguagePrompt(basePrompt) {
+  if (S.lang !== 'uk') return basePrompt;
+  return `${basePrompt}
+
+Respond in Ukrainian.
+Chess terms to use:
+пішак (pawn), кінь (knight), слон (bishop), 
+тура (rook), ферзь (queen), король (king),
+виделка (fork), зв'язка (pin), рокіровка (castling),
+розвиток фігур (development), центр (center)
+CRITICAL: Ukrainian only. Zero exceptions.
+If you don't know a Ukrainian word, use a simpler sentence.
+Never insert characters from other languages.
+'розвиток' = development (not 開発, not razvitie)
+If you catch yourself using non-Ukrainian characters — stop and rephrase.
+Шахова нотація завжди латиницею: d4, Nf6, Bb5, O-O.
+Ніколи не перекладай нотацію на кирилицю.
+'d4' не 'д4', 'Nf6' не 'Кf6'.
+No Russian words. No English words in Ukrainian text.
+If unsure of a term — describe it in simple Ukrainian words.
+Максимум одне коротке речення.
+Розмовна українська, не офіційна.
+'Білі' і 'Чорні' завжди з великої літери 
+коли стоять на початку речення.
+В середині речення — з малої: 'ходи білих', 'перевага чорних'.
+Приклад: 'Чорні розвинули коня — центр під контролем.'`;
+}
+
+function getChatChess() {
+  if (S.activeTab === 'play') return S.playChess;
+  if (S.moves.length && S.moveIdx >= 0) return S.reviewChess;
+  return new Chess(getCurrentFen());
+}
+
+function buildChatRequestContext(chess, evalData) {
+  const history = chess.history().slice(-12).join(' ') || 'none';
+  const fen = chess.fen();
+  return {
+    mode: getModeLabel(),
+    san: 'none',
+    color: chess.turn() === 'w' ? 'White' : 'Black',
+    beforeFen: fen,
+    afterFen: fen,
+    evalBefore: parseEval(evalData).score,
+    evalAfter: parseEval(evalData).score,
+    bestLine: firstMoves(evalData?.pvs?.[0]?.moves || '', 6),
+    moveHistory: history,
+    playerElo: 'unknown',
+  };
+}
+
+function buildContext(ctx) {
+  const chess = ctx?.afterFen ? new Chess(ctx.afterFen) : getChatChess();
+  const facts = buildMoveFacts({ ...(ctx || {}), afterFen: chess.fen() });
+  const history = ctx?.moveHistory || chess.history().slice(-12).join(' ') || 'none';
+  const bestLine = ctx?.bestLine || 'none';
+  const evalScore = Number(ctx?.evalAfter ?? S.currentEval.score ?? 0);
+  return `FEN: ${chess.fen()}.
+Eval: ${formatPawns(evalScore)} favoring ${evalFavoriteColor(evalScore)}.
+Move history: ${history}.
+Material: White has ${facts.whiteMaterial}. Black has ${facts.blackMaterial}. Material difference: ${facts.materialDiff}.
+Best line: ${bestLine}.
+${S.weaknessSummaryLine !== 'none yet' ? `Weakness summary: ${S.weaknessSummaryLine}.` : ''}`;
+}
+
+function maybeSummarizeFinishedPlayGame(result) {
+  if (!S.playChess.history().length) return;
+  const mistakes = [...S.playMistakes];
+  S.playMistakes = [];
+  if (!mistakes.length) return;
+  void summarizePlayGameInChat(mistakes, S.playChess.history().length, result);
+}
+
+async function summarizePlayGameInChat(mistakes, totalMoves, result) {
+  try {
+    const prompt = `Game summary. Player mistakes:
+${mistakes.map(m => `Move ${m.num}: ${m.san} lost ${m.delta} pawns`).join('\n')}
+Total moves: ${totalMoves}
+Result: ${result}
+
+Give a 3-point coaching summary:
+- Where the game was lost (specific move)
+- Main weakness shown
+- One thing to study
+Brooklyn style. Honest. Direct. No fluff.`;
+    const summary = await callGroqWithSystemPrompt(buildSummarySystemPrompt(), prompt, 260);
+    appendChatMessage(summary, 'asst');
+  } catch (e) {
+    appendGroqErrorToChat(e);
+  }
+}
+
+function getModeLabel() {
+  if (S.activeTab === 'play') return 'Play vs Coach';
+  return 'Review Game';
+}
+
+function getCurrentFen() {
+  if (S.activeTab === 'play') return S.playChess.fen();
+  return S.moveIdx >= 0 ? (S.moves[S.moveIdx]?.fen || START_FEN) : START_FEN;
+}
+
+function countBoardPieces(chess) {
+  let count = 0;
+  chess.board().flat().forEach(piece => { if (piece) count += 1; });
+  return count;
+}
+
+function evalFavoriteColor(score) {
+  if ((score || 0) > 0.2) return 'White';
+  if ((score || 0) < -0.2) return 'Black';
+  return 'neither side';
+}
+
+function formatPawns(value) {
+  const num = Number(value || 0);
+  return num > 0 ? `+${num.toFixed(2)}` : num.toFixed(2);
+}
+
+async function callGroqWithContext(userMessage, ctx, maxTokens = 350) {
+  const key = localStorage.getItem(STORAGE_KEYS.groq)?.trim() || '';
+  if (!key) throw new Error(t('noGroqKey'));
+  return callGroqWithSystemPrompt(buildGroqSystemPrompt(ctx), userMessage, maxTokens, { includeHistory: true });
+}
+
+async function callGroqWithSystemPrompt(systemPrompt, userMessage, maxTokens = 350, options = {}) {
+  const key = localStorage.getItem(STORAGE_KEYS.groq)?.trim() || '';
+  if (!key) throw new Error(t('noGroqKey'));
+  const model = 'llama-3.3-70b-versatile';
+  const includeHistory = Boolean(options.includeHistory);
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...(includeHistory ? S.chatHistory.slice(-6) : []),
+    { role: 'user', content: userMessage },
+  ];
+  let resp;
+  try {
+    resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        max_tokens: maxTokens,
+      }),
+    });
+  } catch (err) {
+    const e = new Error(err?.message || 'Network error');
+    e.model = model;
+    e.status = 'network';
+    e.isGroqError = true;
+    throw e;
+  }
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    const e = new Error(err.error?.message || `HTTP ${resp.status}`);
+    e.model = model;
+    e.status = resp.status;
+    e.isGroqError = true;
+    throw e;
+  }
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.content?.trim() || t('noResponse');
+}
+
+function appendChatMessage(text, role) {
+  const c = document.getElementById('chatMsgs');
+  const d = document.createElement('div');
+  d.className = `cmsg ${role}`;
+  d.textContent = text;
+  c.appendChild(d);
+  c.scrollTop = c.scrollHeight;
+}
+
+function formatGroqErrorMessage(err) {
+  const message = err?.message || t('noResponse');
+  const model = err?.model || 'unknown';
+  const status = err?.status ?? 'unknown';
+  return `${t('errorPrefix')}${message}\n${t('modelLabel')}: ${model}\n${t('statusLabel')}: ${status}`;
+}
+
+function appendGroqErrorToChat(err) {
+  appendChatMessage(formatGroqErrorMessage(err), 'error');
+}
+
+let msgCounter = 0;
+function appendLoading(containerId) {
+  const id = `ld-${++msgCounter}`;
+  const c = document.getElementById(containerId);
+  const d = document.createElement('div');
+  d.className = 'cmsg asst';
+  d.id = id;
+  d.innerHTML = loadingDots();
+  c.appendChild(d);
+  c.scrollTop = c.scrollHeight;
+  return id;
+}
+
+function loadingDots() {
+  return '<div class="dots"><span></span><span></span><span></span></div>';
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function analyzeMyGames() {
+  if (S.weaknessRunning) return;
+  const lichessUser = document.getElementById('inLichessUser').value.trim();
+  const chesscomUser = document.getElementById('inChesscomUser').value.trim();
+  if (!lichessUser && !chesscomUser) {
+    wrShowError(t('noUsernames'));
+    return;
+  }
+  S.weaknessRunning = true;
+  document.getElementById('wrError').style.display = 'none';
+  document.getElementById('btnAnalyzeGames').disabled = true;
+  try {
+    const sinceMs = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    const untilMs = Date.now();
+    let games = [];
+    if (lichessUser) {
+      const found = await fetchLichessGames(lichessUser, sinceMs, untilMs, 200);
+      games = games.concat(found.map(g => ({ ...g, sampleUser: lichessUser })));
+      wrProgress(10, t('gamesFound', { count: games.length }));
+    }
+    if (chesscomUser) {
+      const found = await fetchChessComRecentGames(chesscomUser, sinceMs);
+      games = games.concat(found.map(g => ({ ...g, sampleUser: chesscomUser })));
+      wrProgress(18, t('gamesFound', { count: games.length }));
+    }
+    if (!games.length) throw new Error(t('noRecentGames'));
+
+    const prepared = games.map(g => prepareGameForAnalysis(g)).filter(Boolean);
+    const totalPositions = prepared.reduce((sum, g) => sum + g.samples.length, 0);
+    let analyzed = 0;
+    const phaseStats = {
+      all: { totalCpLoss: 0, count: 0 },
+      opening: { totalCpLoss: 0, count: 0 },
+      middlegame: { totalCpLoss: 0, count: 0 },
+      endgame: { totalCpLoss: 0, count: 0 },
+      game: { totalCpLoss: 0, count: 0 },
+    };
+    const openingMap = {};
+    const collapseMap = {};
+    let blownWins = 0;
+
+    for (const game of prepared) {
+      let peakAdvantage = -99999;
+      let cumulativeOpeningEval = 0;
+      let openingEvalCount = 0;
+      for (const sample of game.samples) {
+        await sleep(300);
+        const evalData = await fetchEval(sample.afterFen, 3);
+        const evalCp = parseEval(evalData).cp;
+        sample.evalCp = evalCp;
+        peakAdvantage = Math.max(peakAdvantage, perspectiveCp(evalCp, game.playerColor));
+        const lossCp = sample.prevEvalCp === null ? 0 : Math.max(0, perspectiveCp(sample.prevEvalCp, game.playerColor) - perspectiveCp(evalCp, game.playerColor));
+        phaseStats.all.totalCpLoss += lossCp;
+        phaseStats.all.count += 1;
+        phaseStats[sample.phase].totalCpLoss += lossCp;
+        phaseStats[sample.phase].count += 1;
+        if (!openingMap[game.opening]) openingMap[game.opening] = { w: 0, d: 0, l: 0, totalEval: 0, evalCount: 0, games: 0 };
+        if (sample.phase === 'opening' || sample.phase === 'game') {
+          openingMap[game.opening].totalEval += perspectiveCp(evalCp, game.playerColor);
+          openingMap[game.opening].evalCount += 1;
+          cumulativeOpeningEval += perspectiveCp(evalCp, game.playerColor);
+          openingEvalCount += 1;
+        }
+        if (lossCp >= 150) {
+          const key = sample.phase;
+          if (!collapseMap[key]) collapseMap[key] = new Set();
+          collapseMap[key].add(game.id);
+        }
+        sample.prevEvalCp = evalCp;
+        analyzed += 1;
+        wrProgress(20 + Math.round((analyzed / Math.max(totalPositions, 1)) * 65), t('analyzingPositions', { done: analyzed, total: totalPositions }));
+      }
+      const outcome = resultForPlayer(game.result, game.playerColor);
+      if (peakAdvantage >= 200 && outcome === 'loss') blownWins += 1;
+      if (!openingMap[game.opening]) openingMap[game.opening] = { w: 0, d: 0, l: 0, totalEval: 0, evalCount: 0, games: 0 };
+      openingMap[game.opening].games += 1;
+      openingMap[game.opening][resultLetter(outcome)] += 1;
+    }
+
+    wrProgress(92, t('buildingReport'));
+    const phaseAverages = {};
+    for (const [phase, stats] of Object.entries(phaseStats)) {
+      if (!stats.count) continue;
+      phaseAverages[phase] = Math.round(stats.totalCpLoss / stats.count);
+    }
+    const flaggedOpenings = Object.entries(openingMap)
+      .filter(([, v]) => v.games >= 3 && v.evalCount && (v.totalEval / v.evalCount) < 0)
+      .map(([name]) => name);
+    const recurringCollapses = Object.entries(collapseMap)
+      .filter(([, set]) => set.size >= 3)
+      .map(([phase]) => phase);
+
+    const statsText = [
+      `Games analyzed: ${prepared.length}`,
+      `Average centipawn loss by phase: ${JSON.stringify(phaseAverages)}`,
+      `Blown wins: ${blownWins}`,
+      `Opening records: ${Object.entries(openingMap).map(([k, v]) => `${k} ${v.w}/${v.d}/${v.l}`).join('; ')}`,
+      `Flagged openings: ${flaggedOpenings.join(', ') || 'none'}`,
+      `Recurring eval collapses: ${recurringCollapses.join(', ') || 'none'}`,
+    ].join('\n');
+
+    const report = await callGroqWithContext(
+      i18n.en.reportPrompt.replace('{stats}', statsText),
+      {
+        mode: getModeLabel(),
+        san: 'none',
+        color: 'White',
+        moveNumber: 0,
+        beforeFen: getCurrentFen(),
+        afterFen: getCurrentFen(),
+        evalBefore: S.currentEval.score,
+        evalAfter: S.currentEval.score,
+        bestLine: 'none',
+        playerElo: 'unknown',
+      },
+      700
+    );
+    S.weaknessReport = report;
+    S.weaknessSummaryLine = summarizeWeaknessLine(phaseAverages, flaggedOpenings, recurringCollapses, blownWins);
+    wrProgress(100, t('buildingReport'));
+    appendChatMessage(report, 'asst');
+  } catch (e) {
+    if (e?.isGroqError || e?.model || e?.status) appendGroqErrorToChat(e);
+    wrShowError(e.message);
+  } finally {
+    S.weaknessRunning = false;
+    document.getElementById('btnAnalyzeGames').disabled = false;
+  }
+}
+
+function wrProgress(pct, status) {
+  document.getElementById('wrProgress').style.display = 'block';
+  document.getElementById('wrStatus').textContent = status;
+  document.getElementById('wrFill').style.width = `${pct}%`;
+}
+
+function wrShowError(msg) {
+  document.getElementById('wrProgress').style.display = 'none';
+  document.getElementById('wrError').style.display = 'block';
+  document.getElementById('wrError').textContent = msg;
+}
+
+function summarizeWeaknessLine(phaseAverages, flaggedOpenings, recurringCollapses, blownWins) {
+  const worstPhase = Object.entries(phaseAverages).filter(([k]) => k !== 'all').sort((a, b) => b[1] - a[1])[0];
+  const phaseText = worstPhase ? t('weakPhase', { phase: capitalize(worstPhase[0]) }) : t('noWeaknessReport');
+  const openText = flaggedOpenings.length ? t('weakWatch', { opening: flaggedOpenings[0] }) : '';
+  const collapseText = recurringCollapses.length ? t('weakCollapse', { phase: recurringCollapses[0] }) : '';
+  const blownText = blownWins ? t('weakBlown', {
+    count: blownWins,
+    noun: blownWins === 1 ? t('blownSingular') : t('blownPlural'),
+    ending: blownWins === 1 ? t('blownSingular') : t('blownPlural')
+  }) : '';
+  return `${phaseText}${openText}${collapseText}${blownText}`.trim();
+}
+
+function prepareGameForAnalysis(game) {
+  const history = parsePgnHistory(game.pgn);
+  if (!history || !history.length) return null;
+  const user = (game.platform === 'lichess'
+    ? document.getElementById('inLichessUser').value.trim()
+    : document.getElementById('inChesscomUser').value.trim()).toLowerCase();
+  const playerColor = inferPlayerColor(game, user);
+  if (!playerColor) return null;
+  const temp = new Chess();
+  const totalMoves = history.length;
+  const samples = [];
+  let lastEvalCp = null;
+  history.forEach((mv, idx) => {
+    temp.move(mv);
+    const phase = detectPhase(temp, totalMoves);
+    const fullMove = Math.floor(idx / 2) + 1;
+    const stride = phase === 'middlegame' ? 4 : 3;
+    const shouldSample = totalMoves < 15 ? ((idx + 1) % 2 === 0) : (fullMove % stride === 0);
+    if (shouldSample) {
+      samples.push({
+        phase,
+        afterFen: temp.fen(),
+        prevEvalCp: lastEvalCp,
+      });
+    }
+  });
+  return {
+    id: `${game.platform}:${game.endedAt}:${game.whiteName}:${game.blackName}`,
+    playerColor,
+    result: game.result,
+    opening: game.opening || t('unknownOpening'),
+    samples,
+  };
+}
+
+function inferPlayerColor(game, username) {
+  if ((game.whiteName || '').toLowerCase() === username) return 'w';
+  if ((game.blackName || '').toLowerCase() === username) return 'b';
+  return null;
+}
+
+function detectPhase(chess, totalPlies) {
+  if (totalPlies < 15) return 'game';
+  const fen = chess.fen().split(' ');
+  const rights = fen[2];
+  const departures = countDepartedStartingSquares(chess);
+  const queenCount = countPieces(chess, p => p.type === 'q');
+  const heavyMinor = countPieces(chess, p => !['p', 'k'].includes(p.type));
+  if (queenCount === 0 || heavyMinor <= 3) return 'endgame';
+  if ((rights.includes('K') && rights.includes('Q') && rights.includes('k') && rights.includes('q')) || departures < 6) return 'opening';
+  return 'middlegame';
+}
+
+function countDepartedStartingSquares(chess) {
+  let total = 0;
+  for (const [sq, expected] of Object.entries(STARTING_SQUARES)) {
+    const piece = chess.get(sq);
+    const now = piece ? `${piece.color}${piece.type.toUpperCase()}` : null;
+    if (now !== expected) total += 1;
+  }
+  return total;
+}
+
+function countPieces(chess, predicate) {
+  let count = 0;
+  chess.board().flat().forEach(piece => {
+    if (piece && predicate(piece)) count += 1;
+  });
+  return count;
+}
+
+function perspectiveCp(cp, color) {
+  return color === 'w' ? cp : -cp;
+}
+
+function resultForPlayer(result, color) {
+  const r = result === '1/2-1/2' ? 'draw' : result;
+  if (r === '1-0') return color === 'w' ? 'win' : 'loss';
+  if (r === '0-1') return color === 'b' ? 'win' : 'loss';
+  return 'draw';
+}
+
+function resultLetter(result) {
+  if (result === 'win') return 'w';
+  if (result === 'loss') return 'l';
+  return 'd';
+}
+
+function summarizeGameResult(chess) {
+  if (chess.in_checkmate()) return t('checkmate');
+  if (chess.in_stalemate()) return t('stalemate');
+  if (chess.in_draw()) return t('drawnGame');
+  return t('gameEnded');
+}
+
+function capitalize(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+</script>
+</body>
+</html>
